@@ -1,18 +1,23 @@
 "use client";
-
+import React from 'react';
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import RegistrationForm from "@/components/registration-form";
-import HomeDashboard from "@/components/home-dashboard";
-import useStore from "@/lib/store";
-import { getWalletInfo } from "@/lib/wallet";
+import RegistrationForm from "../components/registration-form";
+import HomeDashboard from "../components/home-dashboard";
+import useStore from "../lib/store";
+import { getWalletInfo } from "../lib/wallet";
+import { SPVWalletUserAPI, OpReturn, DraftTransactionConfig } from '@bsv/spv-wallet-js-client';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"register" | "login" | "dashboard">("register");
   const [walletId, setWalletId] = useState("");
+  const [xPrivKey, setXPrivKey] = useState("");
+  const [message, setMessage] = useState("");
+  const [serverUrl, setServerUrl] = useState(process.env.NEXT_PUBLIC_SPV_WALLET_BASE_URL || 'https://spv.money');
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
   const { user, setUser, clearUser } = useStore();
   const [mounted, setMounted] = useState(false);
 
@@ -26,6 +31,44 @@ export default function Home() {
   }, [user.xpub]);
 
   if (!mounted) return null;
+
+  const initUserWallet = async (xpriv: string) => {
+    if (!serverUrl) {
+      throw new Error('Server URL is not set');
+    }
+    const walletClient = new SPVWalletUserAPI(serverUrl, {
+      xPriv: xpriv,
+    });
+    return walletClient;
+  };
+
+  const createOpReturnTransaction = async (xpriv: string, message: string) => {
+    try {
+      const walletClient = await initUserWallet(xpriv);
+      
+      const opReturn: OpReturn = {
+        stringParts: [message],
+      };
+      
+      const transactionConfig: DraftTransactionConfig = {
+        outputs: [
+          {
+            opReturn: opReturn,
+          },
+        ],
+      };
+      
+      const draftTransaction = await walletClient.draftTransaction(transactionConfig, {});
+      const finalized = await walletClient.finalizeTransaction(draftTransaction);
+      const transaction = await walletClient.recordTransaction(finalized, draftTransaction.id, {});
+      
+      setResult(transaction);
+      return transaction;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      throw err;
+    }
+  };
 
   const handleLogout = () => {
     clearUser();

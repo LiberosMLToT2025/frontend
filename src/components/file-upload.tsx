@@ -1,9 +1,9 @@
 "use client";
-
+import React from 'react';
 import { useState, useRef } from 'react';
-import useStore from '@/lib/store';
+import useStore from '../lib/store';
 import { v4 as uuidv4 } from 'uuid';
-import { uploadFileWithBsv } from '@/lib/file-service';
+import { uploadFileWithBsv } from '../lib/file-service';
 
 const FileUpload = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);

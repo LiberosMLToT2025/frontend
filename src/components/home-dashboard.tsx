@@ -1,11 +1,11 @@
 "use client";
-
+import React from 'react';
 import { useState, useEffect } from 'react';
 import FileUpload from './file-upload';
 import FileList from './file-list';
 import FileExchange from './file-exchange';
 import InscribeText from './inscribe-text';
-import useStore from '@/lib/store';
+import useStore from '../lib/store';
 import { useRouter } from 'next/navigation';
 
 const HomeDashboard = () => {

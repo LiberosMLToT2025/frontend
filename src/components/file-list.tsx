@@ -1,7 +1,7 @@
 "use client";
-
-import useStore from '@/lib/store';
-import { FileItem } from '@/lib/types';
+import React from 'react';
+import useStore from '../lib/store';
+import { FileItem } from '../lib/types';
 
 // Funkcja pomocnicza do formatowania rozmiaru pliku
 const formatFileSize = (bytes: number): string => {

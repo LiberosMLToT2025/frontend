@@ -1,9 +1,9 @@
 "use client";
-
+import React from 'react';
 import { useState } from 'react';
-import useStore from '@/lib/store';
-import { exchangeFileWithBsv } from '@/lib/file-service';
-import { FileItem } from '@/lib/types';
+import useStore from '../lib/store';
+import { exchangeFileWithBsv } from '../lib/file-service';
+import { FileItem } from '../lib/types';
 
 const FileExchange = () => {
   const [recipientPaymail, setRecipientPaymail] = useState('');

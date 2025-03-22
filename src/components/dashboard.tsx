@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getWalletInfo } from '../lib/wallet';
+import React from 'react';
 
 interface WalletInfo {
   id: string;
