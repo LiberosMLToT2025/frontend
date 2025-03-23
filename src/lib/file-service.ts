@@ -14,7 +14,7 @@ export const calculateFileHash = async (file: File): Promise<string> => {
     // W rzeczywistej implementacji użylibyśmy prawdziwego hashowania
     // np. za pomocą crypto.subtle.digest
     
-    // Symulacja obliczania hasha
+    // Symulacja obliczania hasha - generujemy hash w formacie zgodnym z SHA-256 (64 znaki, tylko cyfry 0-9 i litery a-f)
     setTimeout(() => {
       const randomHash = Array.from({ length: 64 }, () => 
         Math.floor(Math.random() * 16).toString(16)
@@ -33,9 +33,14 @@ export const uploadFileWithBsv = async (
   xpriv: string
 ): Promise<{ id: number; hash: string; txId: string }> => {
   try {
+    // Oblicz hash pliku najpierw
+    const hashCalculated = await calculateFileHash(file);
+    
     // Upload file to database
     const formData = new FormData();
     formData.append('file', file);
+    // Dodajemy hash jako dodatkowe pole formularza
+    formData.append('file_hash', hashCalculated);
     
     const uploadResponse = await axios.post(`${API_BASE_URL}/upload/`, formData, {
       headers: {
@@ -43,22 +48,28 @@ export const uploadFileWithBsv = async (
       }
     });
 
-    const { id, hash } = uploadResponse.data;
+    // Pobierz id i hash z odpowiedzi serwera
+    const { id, file_hash } = uploadResponse.data;
+
+    console.log(`Przesłano plik ID: ${id}, Hash: ${file_hash}`);
 
     // Register transaction for the file
     const tx = await createOpReturnTransaction(xpriv, JSON.stringify({
       fileId: id,
-      hash: hash,
+      hash: file_hash,
       filename: file.name,
       timestamp: new Date().toISOString()
     }));
 
-    // Register the transaction with the database
-    await axios.post(`${API_BASE_URL}/register_transaction/${id}/${tx.id}`);
+    // Upewniam się, że hash jest przekazywany prawidłowo
+    console.log(`Rejestracja transakcji dla pliku ID: ${id}, TX: ${tx.id}, Hash: ${file_hash}`);
+    
+    // Register the transaction with the database - bez enkodowania URL, hash musi być w oryginalnym formacie
+    await axios.post(`${API_BASE_URL}/register_transaction/${id}/${tx.id}/${file_hash}`);
 
     return { 
       id,
-      hash,
+      hash: file_hash,
       txId: tx.id 
     };
   } catch (error) {
