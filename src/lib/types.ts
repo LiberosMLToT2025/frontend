@@ -6,8 +6,10 @@ export interface FileItem {
   uploadedAt: Date;
   hash?: string;
   txId?: string;
+  databaseId?: number;
   status: 'pending' | 'uploading' | 'completed' | 'failed';
   progress: number;
+  error?: string;
 }
 
 export interface User {
@@ -17,4 +19,4 @@ export interface User {
   publicName?: string;
   balance?: number;
   walletId?: string;
-} 
+}

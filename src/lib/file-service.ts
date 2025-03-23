@@ -1,4 +1,7 @@
 import { createOpReturnTransaction } from './wallet';
+import axios from 'axios';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // W rzeczywistej aplikacji te funkcje byłyby połączone z BSV
 // i obsługiwałyby faktyczne przesyłanie plików oraz hashowanie
@@ -23,36 +26,99 @@ export const calculateFileHash = async (file: File): Promise<string> => {
 };
 
 /**
- * Przesyła plik do systemu i zapisuje jego metadane w BSV
+ * Uploads a file to the database and returns the database record ID and hash
  */
 export const uploadFileWithBsv = async (
   file: File, 
   xpriv: string
-): Promise<{ hash: string; txId: string }> => {
-  // 1. W rzeczywistej implementacji najpierw przesłalibyśmy plik do usługi przechowywania
-  
-  // 2. Obliczamy hash pliku
-  const hash = await calculateFileHash(file);
-  
-  // 3. Zapisujemy metadane pliku w BSV
-  const metadata = JSON.stringify({
-    name: file.name,
-    size: file.size,
-    type: file.type,
-    hash: hash,
-    timestamp: new Date().toISOString()
-  });
-  
-  // 4. Tworzymy transakcję BSV z metadanymi pliku
+): Promise<{ id: number; hash: string; txId: string }> => {
   try {
-    const tx = await createOpReturnTransaction(xpriv, metadata);
+    // Upload file to database
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const uploadResponse = await axios.post(`${API_BASE_URL}/upload/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+
+    const { id, hash } = uploadResponse.data;
+
+    // Register transaction for the file
+    const tx = await createOpReturnTransaction(xpriv, JSON.stringify({
+      fileId: id,
+      hash: hash,
+      filename: file.name,
+      timestamp: new Date().toISOString()
+    }));
+
+    // Register the transaction with the database
+    await axios.post(`${API_BASE_URL}/register_transaction/${id}/${tx.id}`);
+
     return { 
-      hash, 
-      txId: tx?.id || `sim-tx-${Date.now()}` 
+      id,
+      hash,
+      txId: tx.id 
     };
   } catch (error) {
-    console.error('Błąd podczas tworzenia transakcji BSV:', error);
-    throw new Error('Nie udało się zapisać metadanych pliku w BSV');
+    console.error('Error uploading file:', error);
+    throw error;
+  }
+};
+
+/**
+ * Downloads a file by database record ID
+ */
+export const downloadFileById = async (id: number): Promise<Blob> => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/download/${id}`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error downloading file:', error);
+    throw error;
+  }
+};
+
+/**
+ * Downloads a file by blockchain transaction ID
+ */
+export const downloadFileByTxId = async (txId: string): Promise<Blob> => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/download_by_transaction/${txId}`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error downloading file:', error);
+    throw error;
+  }
+};
+
+/**
+ * Validates file integrity by comparing hash
+ */
+export const validateFile = async (id: number, expectedHash: string): Promise<boolean> => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/validate/${id}/${expectedHash}`);
+    return response.data.is_valid;
+  } catch (error) {
+    console.error('Error validating file:', error);
+    throw error;
+  }
+};
+
+/**
+ * Clears the database (for testing purposes)
+ */
+export const clearDatabase = async (): Promise<void> => {
+  try {
+    await axios.post(`${API_BASE_URL}/clear`);
+  } catch (error) {
+    console.error('Error clearing database:', error);
+    throw error;
   }
 };
 
@@ -85,4 +151,4 @@ export const getFilesFromBsv = async (xpub: string): Promise<any[]> => {
   
   // Symulacja pobrania listy plików
   return [];
-}; 
+};

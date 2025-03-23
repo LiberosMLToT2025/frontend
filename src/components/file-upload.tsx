@@ -3,12 +3,16 @@ import React from 'react';
 import { useState, useRef } from 'react';
 import useStore from '../lib/store';
 import { v4 as uuidv4 } from 'uuid';
-import { uploadFileWithBsv } from '../lib/file-service';
+import { uploadFileWithBsv, validateFile, downloadFileById, downloadFileByTxId } from '../lib/file-service';
 
 const FileUpload = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
-  const { addFile, updateFile, user } = useStore();
+  const [xPrivKey, setXPrivKey] = useState('');
+  const [xPrivError, setXPrivError] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { addFile, updateFile, user, files } = useStore();
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -24,61 +28,117 @@ const FileUpload = () => {
   const handleFilesSelected = (files: FileList | null) => {
     if (!files) return;
     
-    Array.from(files).forEach(file => {
-      const newFile = {
-        id: uuidv4(),
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        uploadedAt: new Date(),
-        status: 'pending' as const,
-        progress: 0,
-      };
-      
-      addFile(newFile);
-      
-      // Rozpocznij przesyłanie pliku i zapisywanie metadanych w BSV
-      processFile(newFile.id, file);
-    });
+    const newFiles = Array.from(files);
+    setSelectedFiles(prev => [...prev, ...newFiles]);
+    setDragActive(false);
   };
 
   const processFile = async (id: string, file: File) => {
     updateFile(id, { status: 'uploading', progress: 10 });
     
     try {
-      if (!user.xpriv) {
-        throw new Error('Brak klucza prywatnego do podpisania transakcji');
+      if (!xPrivKey) {
+        throw new Error('Wprowadź klucz prywatny (xPriv)');
       }
       
-      // Symulujemy progres
-      let progress = 10;
-      const interval = setInterval(() => {
-        progress += 10;
-        if (progress <= 70) {
-          updateFile(id, { progress });
-        } else {
-          clearInterval(interval);
-        }
-      }, 300);
+      // Upload file to database and get database record ID
+      const result = await uploadFileWithBsv(file, xPrivKey);
       
-      // Przesyłamy plik i zapisujemy metadane w BSV
-      const result = await uploadFileWithBsv(file, user.xpriv);
+      // Validate file integrity
+      const isValid = await validateFile(result.id, result.hash);
+      if (!isValid) {
+        throw new Error('File integrity validation failed');
+      }
       
-      clearInterval(interval);
-      
-      // Aktualizujemy stan pliku po zakończeniu przesyłania
+      // Update file state with database record ID and hash
       updateFile(id, { 
         status: 'completed',
         progress: 100,
         hash: result.hash,
-        txId: result.txId
+        txId: result.txId,
+        databaseId: result.id,
       });
     } catch (error) {
-      console.error('Błąd podczas przesyłania pliku:', error);
+      console.error('Error uploading file:', error);
       updateFile(id, { 
         status: 'failed',
-        progress: 0
+        progress: 0,
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
+    }
+  };
+
+  const handleDownloadById = async (databaseId: number) => {
+    try {
+      const fileBlob = await downloadFileById(databaseId);
+      const url = window.URL.createObjectURL(fileBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `downloaded_file`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      alert('Failed to download file');
+    }
+  };
+
+  const handleDownloadByTx = async (txId: string) => {
+    try {
+      const fileBlob = await downloadFileByTxId(txId);
+      const url = window.URL.createObjectURL(fileBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `downloaded_file`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      alert('Failed to download file');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    if (!xPrivKey) {
+      setXPrivError('Wprowadź klucz prywatny (xPriv)');
+      return;
+    }
+
+    if (selectedFiles.length === 0) {
+      setXPrivError('Wybierz pliki do przesłania');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setXPrivError('');
+
+    try {
+      for (const file of selectedFiles) {
+        const newFile = {
+          id: uuidv4(),
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          uploadedAt: new Date(),
+          status: 'pending' as const,
+          progress: 0,
+        };
+        
+        addFile(newFile);
+        await processFile(newFile.id, file);
+      }
+      
+      setSelectedFiles([]);
+    } catch (error) {
+      console.error('Błąd podczas przesyłania plików:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -99,52 +159,137 @@ const FileUpload = () => {
   };
 
   return (
-    <div 
-      className={`border-2 border-dashed p-4 rounded text-center ${
-        dragActive 
-          ? 'border-blue-500 bg-blue-50' 
-          : 'border-gray-300'
-      }`}
-      onDragEnter={handleDrag}
-      onDragOver={handleDrag}
-      onDragLeave={handleDrag}
-      onDrop={handleDrop}
-    >
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={handleFileInputChange}
-      />
-      
-      <div className="flex flex-col items-center justify-center space-y-3">
-        <h3 className="text-lg font-medium text-gray-800">
-          {dragActive ? 'Upuść pliki tutaj' : 'Przeciągnij i upuść pliki'}
-        </h3>
-        
-        <p className="text-sm text-gray-600 max-w-xs mx-auto">
-          Przeciągnij pliki tutaj lub kliknij przycisk poniżej, aby wybrać pliki z dysku
-        </p>
-        
-        <button
-          type="button"
-          onClick={handleButtonClick}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-        >
-          Wybierz pliki
-        </button>
-        
-        <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-gray-500 mt-2">
-          <span>Wszystkie typy plików</span>
-          <span>•</span>
-          <span>Maks. 100MB</span>
-          <span>•</span>
-          <span>Szyfrowanie BSV</span>
+    <div>
+      <form onSubmit={handleSubmit} className="flex flex-col items-center justify-center p-4 space-y-4">
+        <div className="flex flex-col gap-4 w-full max-w-md">
+          <div className="relative">
+            <input
+              type="text"
+              value={xPrivKey}
+              onChange={(e) => {
+                setXPrivKey(e.target.value);
+                setXPrivError('');
+              }}
+              placeholder="Wprowadź klucz prywatny (xPriv)"
+              className="w-full px-3 py-2 border border-subtle rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-card"
+            />
+            {xPrivError && (
+              <div className="text-danger text-sm mt-1">{xPrivError}</div>
+            )}
+          </div>
+
+          <div
+            className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
+              dragActive ? 'border-primary bg-primary/5' : 'border-subtle bg-card'
+            }`}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+          >
+            <p className="text-gray-500 dark:text-gray-400">
+              Przeciągnij i upuść pliki tutaj lub
+            </p>
+            <button
+              onClick={handleButtonClick}
+              className="mt-2 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+            >
+              Wybierz pliki
+            </button>
+          </div>
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            multiple
+            onChange={handleFileInputChange}
+            className="hidden"
+          />
+
+          {selectedFiles.length > 0 && (
+            <div className="mt-4 p-3 bg-card rounded-md border border-subtle">
+              <p className="text-sm text-gray-600">Wybrane pliki ({selectedFiles.length}):</p>
+              <ul className="mt-2 space-y-1">
+                {selectedFiles.map((file, index) => (
+                  <li key={index} className="text-sm text-gray-500">
+                    {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={isSubmitting || !xPrivKey || selectedFiles.length === 0}
+            className={`w-full py-2 px-4 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors flex items-center justify-center ${
+              isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {isSubmitting ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Przesyłanie...
+              </>
+            ) : (
+              'Prześlij pliki'
+            )}
+          </button>
+        </div>
+      </form>
+
+      {/* File List */}
+      <div className="mt-6">
+        <h2 className="text-xl font-bold mb-4">Przesłane pliki</h2>
+        <div className="space-y-4">
+          {files.map((file) => (
+            <div key={file.id} className="bg-card p-4 rounded-md border border-subtle">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="font-medium">{file.name}</h3>
+                  <p className="text-sm text-gray-500">
+                    {file.status === 'completed' && (
+                      <>
+                        <span className="text-green-500">Zakończono</span>
+                        <span className="ml-2">|</span>
+                        <span className="ml-2">Hash: {file.hash?.substring(0, 8)}...</span>
+                        <span className="ml-2">|</span>
+                        <span className="ml-2">TX ID: {file.txId?.substring(0, 8)}...</span>
+                      </>
+                    )}
+                    {file.status === 'failed' && (
+                      <span className="text-red-500">Błąd: {file.error}</span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex space-x-2">
+                  {file.status === 'completed' && (
+                    <>
+                      <button
+                        onClick={() => handleDownloadById(file.databaseId!)}
+                        className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                      >
+                        Pobierz (ID)
+                      </button>
+                      <button
+                        onClick={() => handleDownloadByTx(file.txId!)}
+                        className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+                      >
+                        Pobierz (TX)
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
   );
 };
 
-export default FileUpload; 
+export default FileUpload;
