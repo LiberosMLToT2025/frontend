@@ -7,6 +7,7 @@ import HomeDashboard from "../components/home-dashboard";
 import useStore from "../lib/store";
 import { getWalletInfo } from "../lib/wallet";
 import { SPVWalletUserAPI, OpReturn, DraftTransactionConfig } from '@bsv/spv-wallet-js-client';
+import { initUserWallet } from "../lib/wallet";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"register" | "login" | "dashboard">("register");
@@ -18,6 +19,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [usePrivateKey, setUsePrivateKey] = useState(false);
   const { user, setUser, clearUser } = useStore();
   const [mounted, setMounted] = useState(false);
 
@@ -31,16 +33,6 @@ export default function Home() {
   }, [user.xpub]);
 
   if (!mounted) return null;
-
-  const initUserWallet = async (xpriv: string) => {
-    if (!serverUrl) {
-      throw new Error('Server URL is not set');
-    }
-    const walletClient = new SPVWalletUserAPI(serverUrl, {
-      xPriv: xpriv,
-    });
-    return walletClient;
-  };
 
   const createOpReturnTransaction = async (xpriv: string, message: string) => {
     try {
@@ -80,27 +72,77 @@ export default function Home() {
     setLoginError("");
     setIsLoading(true);
 
-    if (!walletId) {
-      setLoginError("Wprowadź klucz publiczny (xpub)");
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      // Pobieramy dane portfela z API
-      const walletInfo = await getWalletInfo(walletId);
-      
-      // Ustawiamy dane użytkownika w store
-      setUser({ 
-        xpub: walletId,
-        balance: walletInfo.currentBalance,
-        walletId: walletInfo.id
-      });
-      
-      setActiveTab("dashboard");
+      if (usePrivateKey) {
+        // Logowanie za pomocą klucza prywatnego
+        if (!xPrivKey) {
+          setLoginError("Wprowadź klucz prywatny (xpriv)");
+          setIsLoading(false);
+          return;
+        }
+
+        console.log("Logowanie za pomocą klucza prywatnego (xpriv)");
+
+        // Inicjalizujemy portfel z kluczem prywatnym
+        const walletClient = await initUserWallet(xPrivKey);
+        const xpubInfo = await walletClient.xPub();
+        
+        // Pobieramy dane portfela
+        const walletInfo = {
+          id: xpubInfo.id,
+          currentBalance: xpubInfo.currentBalance || 0
+        };
+        
+        console.log("Dane portfela (tryb prywatny):", walletInfo);
+        
+        // Ustawiamy dane użytkownika w store z kluczem prywatnym
+        setUser({ 
+          xpub: xpubInfo.id,
+          xpriv: xPrivKey,
+          balance: walletInfo.currentBalance,
+          walletId: walletInfo.id,
+          isPrivateMode: true // Dodajemy flagę trybu prywatnego
+        });
+        
+        setActiveTab("dashboard");
+      } else {
+        // Logowanie za pomocą klucza publicznego (xpub)
+        if (!walletId) {
+          setLoginError("Wprowadź klucz publiczny (xpub)");
+          setIsLoading(false);
+          return;
+        }
+
+        console.log("Logowanie za pomocą klucza publicznego (xpub)");
+
+        try {
+          // Pobieramy podstawowe dane portfela z API (bez salda)
+          const walletInfo = await getWalletInfo(walletId);
+          console.log("Dane portfela (tryb publiczny):", walletInfo);
+          
+          // Ustawiamy dane użytkownika w store - BEZ salda
+          setUser({ 
+            xpub: walletId,
+            walletId: walletInfo.id || walletId,
+            isPrivateMode: false // Dodajemy flagę trybu publicznego
+          });
+        } catch (err) {
+          console.error("Błąd pobierania danych portfela:", err);
+          // Nawet jeśli API nie zwróci danych, pozwalamy na zalogowanie tylko z kluczem publicznym
+          setUser({ 
+            xpub: walletId,
+            walletId: walletId,
+            isPrivateMode: false
+          });
+        }
+        
+        setActiveTab("dashboard");
+      }
     } catch (error) {
       console.error("Błąd logowania:", error);
-      setLoginError("Nie udało się zalogować. Sprawdź poprawność klucza publicznego (xpub).");
+      setLoginError(usePrivateKey 
+        ? "Nie udało się zalogować. Sprawdź poprawność klucza prywatnego (xpriv)." 
+        : "Nie udało się zalogować. Sprawdź poprawność klucza publicznego (xpub).");
     } finally {
       setIsLoading(false);
     }
@@ -115,23 +157,68 @@ export default function Home() {
         </div>
       )}
       <form onSubmit={handleLogin} className="space-y-4">
-        <div>
-          <label htmlFor="walletId" className="block text-sm font-medium mb-1">
-            Klucz publiczny xPub
-          </label>
-          <input
-            id="walletId"
-            type="text"
-            value={walletId}
-            onChange={(e) => setWalletId(e.target.value)}
-            placeholder="Wprowadź klucz publiczny (xpub)..."
-            className="w-full px-3 py-2 border border-subtle rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-card"
-            required
-          />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Wprowadź klucz publiczny (xpub), aby uzyskać dostęp do swojego portfela
-          </p>
+        <div className="flex mb-4">
+          <button
+            type="button"
+            className={`flex-1 py-2 text-center ${
+              !usePrivateKey
+                ? "bg-primary text-white"
+                : "bg-subtle text-foreground"
+            }`}
+            onClick={() => setUsePrivateKey(false)}
+          >
+            Klucz publiczny
+          </button>
+          <button
+            type="button"
+            className={`flex-1 py-2 text-center ${
+              usePrivateKey
+                ? "bg-primary text-white"
+                : "bg-subtle text-foreground"
+            }`}
+            onClick={() => setUsePrivateKey(true)}
+          >
+            Klucz prywatny
+          </button>
         </div>
+
+        {usePrivateKey ? (
+          <div>
+            <label htmlFor="xPrivKey" className="block text-sm font-medium mb-1">
+              Klucz prywatny (xPriv)
+            </label>
+            <input
+              id="xPrivKey"
+              type="password"
+              value={xPrivKey}
+              onChange={(e) => setXPrivKey(e.target.value)}
+              placeholder="Wprowadź klucz prywatny (xpriv)..."
+              className="w-full px-3 py-2 border border-subtle rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-card"
+              required
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Wprowadź klucz prywatny (xpriv), aby uzyskać pełny dostęp do swojego portfela
+            </p>
+          </div>
+        ) : (
+          <div>
+            <label htmlFor="walletId" className="block text-sm font-medium mb-1">
+              Klucz publiczny (xPub)
+            </label>
+            <input
+              id="walletId"
+              type="text"
+              value={walletId}
+              onChange={(e) => setWalletId(e.target.value)}
+              placeholder="Wprowadź klucz publiczny (xpub)..."
+              className="w-full px-3 py-2 border border-subtle rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-card"
+              required
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Wprowadź klucz publiczny (xpub), aby uzyskać dostęp do swojego portfela (tylko odczyt)
+            </p>
+          </div>
+        )}
         
         <button 
           type="submit" 
@@ -161,32 +248,48 @@ export default function Home() {
     </div>
   );
 
+  // Dodajemy nową funkcję renderującą informacje o koncie użytkownika
+  const renderUserInfo = () => {
+    return (
+      <div className="text-center mb-4">
+        <h1 className="text-3xl font-bold bg-gradient-blue-purple text-transparent bg-clip-text">
+          Stellum Dashboard
+        </h1>
+        <p className="mt-2 text-gray-600 dark:text-gray-300">
+          Witaj, ID portfela: {user.walletId || user.xpub?.substring(0, 8)}...
+        </p>
+        {user.publicName && (
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {user.publicName} {user.paymail && `(${user.paymail})`}
+          </p>
+        )}
+        
+        {/* Wyświetlamy saldo tylko w trybie prywatnym */}
+        {user.isPrivateMode && user.balance !== undefined && (
+          <div className="mt-2 bg-subtle inline-block px-4 py-2 rounded-full">
+            <div className="flex items-center">
+              <svg className="w-4 h-4 mr-2 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <span className="font-medium">Saldo: {user.balance} satoshi</span>
+            </div>
+          </div>
+        )}
+        
+        {/* Informacja o trybie przeglądania */}
+        <div className={`mt-2 inline-block px-4 py-2 rounded-full ${user.isPrivateMode ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+          {user.isPrivateMode ? 'Tryb prywatny' : 'Tryb publiczny (tylko odczyt)'}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="container mx-auto max-w-5xl px-4">
       {user.xpub ? (
         <div>
           <div className="mb-6">
-            <div className="text-center mb-4">
-              <h1 className="text-3xl font-bold bg-gradient-blue-purple text-transparent bg-clip-text">
-                Stellum Dashboard
-              </h1>
-              <p className="mt-2 text-gray-600 dark:text-gray-300">
-                Witaj, ID portfela: {user.walletId || user.xpub?.substring(0, 8)}...
-              </p>
-              {user.publicName && (
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {user.publicName} {user.paymail && `(${user.paymail})`}
-                </p>
-              )}
-              <div className="mt-2 bg-subtle inline-block px-4 py-2 rounded-full">
-                <div className="flex items-center">
-                  <svg className="w-4 h-4 mr-2 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                  <span className="font-medium">Saldo: {user.balance} satoshi</span>
-                </div>
-              </div>
-            </div>
+            {renderUserInfo()}
             <button
               onClick={handleLogout}
               className="bg-subtle hover:bg-gray-200 dark:hover:bg-gray-700 text-foreground px-4 py-2 rounded-md transition-colors block mx-auto"
@@ -208,7 +311,7 @@ export default function Home() {
           </div>
         
           <div className="mb-6">
-            <nav className="border-b border-subtle pb-1">
+            <div className="border-b border-subtle pb-1">
               <ul className="flex space-x-6 justify-center">
                 <li>
                   <button
@@ -235,17 +338,17 @@ export default function Home() {
                   </button>
                 </li>
               </ul>
-            </nav>
-          </div>
+            </div>
 
-          <div className="max-w-lg mx-auto mb-8">
-            {activeTab === "register" ? (
-              <div className="bg-card p-6 rounded-lg shadow-md border border-subtle">
-                <RegistrationForm />
-              </div>
-            ) : activeTab === "login" ? (
-              renderLoginForm()
-            ) : null}
+            <div className="max-w-lg mx-auto mb-8">
+              {activeTab === "register" ? (
+                <div className="bg-card p-6 rounded-lg shadow-md border border-subtle">
+                  <RegistrationForm />
+                </div>
+              ) : activeTab === "login" ? (
+                renderLoginForm()
+              ) : null}
+            </div>
           </div>
         </div>
       )}

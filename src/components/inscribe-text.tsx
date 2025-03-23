@@ -1,19 +1,42 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createOpReturnTransaction } from '../lib/wallet';
+import useStore from '../lib/store';
 
 interface InscribeTextProps {
   xpriv?: string;
 }
 
 export default function InscribeText({ xpriv }: InscribeTextProps) {
+  const { user } = useStore();
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [transactionId, setTransactionId] = useState('');
-  const [userXpriv, setUserXpriv] = useState(xpriv || '');
+  const [userXpriv, setUserXpriv] = useState('');
+
+  // Funkcja do wyzwalania odświeżania dashboardu
+  const triggerDashboardRefresh = () => {
+    console.log("InscribeText - Wyzwalanie odświeżania dashboardu po zapisie na blockchain");
+    const refreshEvent = new CustomEvent('dashboardRefresh', { bubbles: true });
+    window.dispatchEvent(refreshEvent);
+    // Dodatkowe bezpośrednie wywołanie zdarzenia dla pewności
+    setTimeout(() => {
+      console.log("InscribeText - Ponowna próba wyzwolenia odświeżania dashboardu");
+      window.dispatchEvent(new Event('dashboardRefresh'));
+    }, 500);
+  };
+
+  // Użyj klucza prywatnego z props lub ze store
+  useEffect(() => {
+    if (xpriv) {
+      setUserXpriv(xpriv);
+    } else if (user.xpriv) {
+      setUserXpriv(user.xpriv);
+    }
+  }, [xpriv, user.xpriv]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -33,6 +56,9 @@ export default function InscribeText({ xpriv }: InscribeTextProps) {
       setTransactionId(transaction.id);
       setSuccess('Wiadomość została zapisana na blockchain!');
       setMessage('');
+      
+      // Odśwież dashboard po pomyślnym zapisie na blockchain
+      triggerDashboardRefresh();
     } catch (err) {
       console.error('Nie udało się utworzyć transakcji:', err);
       setError('Nie udało się utworzyć transakcji. Sprawdź dane i spróbuj ponownie.');
@@ -59,7 +85,7 @@ export default function InscribeText({ xpriv }: InscribeTextProps) {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {!xpriv && (
+        {!xpriv && !user.xpriv && (
           <div>
             <label className="block text-sm font-medium mb-1" htmlFor="xpriv">
               Klucz prywatny xPriv

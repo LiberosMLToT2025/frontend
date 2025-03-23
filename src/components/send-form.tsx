@@ -14,6 +14,18 @@ export default function SendForm({ xpriv }: SendFormProps) {
   const [transactionId, setTransactionId] = useState('');
   const [userXpriv, setUserXpriv] = useState(xpriv || ''); // Store user-provided xpriv
 
+  // Funkcja do wyzwalania odświeżania dashboardu
+  const triggerDashboardRefresh = () => {
+    console.log("SendForm - Wyzwalanie odświeżania dashboardu po transakcji");
+    const refreshEvent = new CustomEvent('dashboardRefresh', { bubbles: true });
+    window.dispatchEvent(refreshEvent);
+    // Dodatkowe bezpośrednie wywołanie zdarzenia dla pewności
+    setTimeout(() => {
+      console.log("SendForm - Ponowna próba wyzwolenia odświeżania dashboardu");
+      window.dispatchEvent(new Event('dashboardRefresh'));
+    }, 500);
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -43,6 +55,9 @@ export default function SendForm({ xpriv }: SendFormProps) {
       const transaction = await createTransaction(userXpriv, recipients, {});
       setTransactionId(transaction.id);
       setSuccess('Transaction created successfully!');
+
+      // Wywołaj odświeżenie dashboardu po pomyślnej transakcji
+      triggerDashboardRefresh();
 
       // Reset form
       setRecipient('');

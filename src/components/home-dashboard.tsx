@@ -19,6 +19,13 @@ const HomeDashboard = () => {
     setMounted(true);
   }, []);
 
+  // Ustaw domyślną zakładkę w zależności od trybu przeglądania
+  useEffect(() => {
+    if (!user.isPrivateMode) {
+      setActiveTab('exchange');
+    }
+  }, [user.isPrivateMode]);
+
   const handleLogout = () => {
     clearUser();
     router.push('/');
@@ -40,19 +47,21 @@ const HomeDashboard = () => {
           <div className="border-b border-subtle">
             <div className="flex flex-col sm:flex-row justify-between items-center p-4">
               <div className="flex mb-4 sm:mb-0">
-                <button
-                  className={`px-4 py-2 mr-2 rounded-md flex items-center ${
-                    activeTab === 'upload'
-                      ? 'bg-primary text-white'
-                      : 'bg-subtle text-foreground hover:bg-gray-200 dark:hover:bg-gray-700'
-                  } transition-colors`}
-                  onClick={() => setActiveTab('upload')}
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                  </svg>
-                  Pliki
-                </button>
+                {user.isPrivateMode && (
+                  <button
+                    className={`px-4 py-2 mr-2 rounded-md flex items-center ${
+                      activeTab === 'upload'
+                        ? 'bg-primary text-white'
+                        : 'bg-subtle text-foreground hover:bg-gray-200 dark:hover:bg-gray-700'
+                    } transition-colors`}
+                    onClick={() => setActiveTab('upload')}
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    Pliki
+                  </button>
+                )}
                 <button
                   className={`px-4 py-2 mr-2 rounded-md flex items-center ${
                     activeTab === 'exchange'
@@ -64,34 +73,50 @@ const HomeDashboard = () => {
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
                   </svg>
-                  Wymiana
+                  {user.isPrivateMode ? 'Wymiana' : 'Historia transakcji'}
                 </button>
-                <button
-                  className={`px-4 py-2 rounded-md flex items-center ${
-                    activeTab === 'inscribe'
-                      ? 'bg-primary text-white'
-                      : 'bg-subtle text-foreground hover:bg-gray-200 dark:hover:bg-gray-700'
-                  } transition-colors`}
-                  onClick={() => setActiveTab('inscribe')}
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                {user.isPrivateMode && (
+                  <button
+                    className={`px-4 py-2 rounded-md flex items-center ${
+                      activeTab === 'inscribe'
+                        ? 'bg-primary text-white'
+                        : 'bg-subtle text-foreground hover:bg-gray-200 dark:hover:bg-gray-700'
+                    } transition-colors`}
+                    onClick={() => setActiveTab('inscribe')}
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Wiadomość
+                  </button>
+                )}
+              </div>
+              
+              {/* Wyświetlamy saldo tylko w trybie prywatnym */}
+              {user.isPrivateMode && user.balance !== undefined && (
+                <div className="bg-subtle rounded-md px-4 py-2 border border-subtle flex items-center">
+                  <svg className="w-4 h-4 mr-2 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                   </svg>
-                  Wiadomość
-                </button>
-              </div>
-              <div className="bg-subtle rounded-md px-4 py-2 border border-subtle flex items-center">
-                <svg className="w-4 h-4 mr-2 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <span className="font-medium text-foreground">Saldo:</span>
-                <span className="ml-2 text-gray-600 dark:text-gray-300">{user.balance || 0} satoshi</span>
-              </div>
+                  <span className="font-medium text-foreground">Saldo:</span>
+                  <span className="ml-2 text-gray-600 dark:text-gray-300">{user.balance || 0} satoshi</span>
+                </div>
+              )}
+              
+              {/* Informacja o trybie przeglądania (publiczny/prywatny) */}
+              {!user.isPrivateMode && (
+                <div className="bg-yellow-100 rounded-md px-4 py-2 border border-yellow-200 flex items-center">
+                  <svg className="w-4 h-4 mr-2 text-yellow-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <span className="text-yellow-800">Tryb publiczny (tylko odczyt historii transakcji)</span>
+                </div>
+              )}
             </div>
           </div>
 
           <div className="p-6">
-            {activeTab === 'upload' && (
+            {activeTab === 'upload' && user.isPrivateMode && (
               <div className="space-y-6">
                 <div className="bg-subtle p-5 rounded-lg border border-subtle">
                   <h2 className="text-lg font-medium mb-4 flex items-center">
@@ -116,9 +141,19 @@ const HomeDashboard = () => {
               </div>
             )}
             
-            {activeTab === 'exchange' && <FileExchange />}
+            {activeTab === 'exchange' && (
+              <div className="bg-subtle p-5 rounded-lg border border-subtle">
+                <h2 className="text-lg font-medium mb-4 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                  </svg>
+                  {user.isPrivateMode ? 'Wymiana plików' : 'Historia transakcji portfela'}
+                </h2>
+                <FileExchange readonly={!user.isPrivateMode} />
+              </div>
+            )}
             
-            {activeTab === 'inscribe' && (
+            {activeTab === 'inscribe' && user.isPrivateMode && (
               <div className="bg-subtle p-5 rounded-lg border border-subtle">
                 <h2 className="text-lg font-medium mb-4 flex items-center">
                   <svg className="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

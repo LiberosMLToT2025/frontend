@@ -13,10 +13,19 @@ export interface FileItem {
 }
 
 export interface User {
-  xpub?: string;
+  xpub: string;
   xpriv?: string;
   paymail?: string;
   publicName?: string;
   balance?: number;
   walletId?: string;
+  isPrivateMode?: boolean;
+}
+
+export interface Transaction {
+  txId: string;
+  timestamp: number;
+  amount: number;
+  type: 'sent' | 'received';
+  description?: string;
 }

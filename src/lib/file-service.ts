@@ -152,3 +152,48 @@ export const getFilesFromBsv = async (xpub: string): Promise<any[]> => {
   // Symulacja pobrania listy plików
   return [];
 };
+
+/**
+ * Pobiera historię transakcji dla danego klucza publicznego (xpub)
+ */
+export const getTransactionHistory = async (xpub: string): Promise<any[]> => {
+  try {
+    // W rzeczywistej implementacji, wywołalibyśmy API do pobrania historii transakcji
+    // z blockchain Bitcoin SV dla danego xpub
+    
+    // Symulacja pobrania historii transakcji
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        // Przykładowe dane transakcji
+        const mockTransactions = [
+          {
+            txId: "0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b",
+            timestamp: Date.now() - 86400000 * 2, // 2 dni temu
+            amount: 5000,
+            type: 'received',
+            description: 'Otrzymane środki'
+          },
+          {
+            txId: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+            timestamp: Date.now() - 86400000, // 1 dzień temu
+            amount: 2500,
+            type: 'sent',
+            description: 'Wysłane środki'
+          },
+          {
+            txId: "2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b",
+            timestamp: Date.now() - 3600000 * 3, // 3 godziny temu
+            amount: 1000,
+            type: 'received',
+            description: 'Wymiana pliku'
+          }
+        ];
+        
+        resolve(mockTransactions);
+      }, 800); // Dodajemy opóźnienie, aby zasymulować czas odpowiedzi API
+    });
+  } catch (error) {
+    console.error('Błąd podczas pobierania historii transakcji:', error);
+    throw error;
+  }
+};

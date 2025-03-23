@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import useStore from '../lib/store';
 import { v4 as uuidv4 } from 'uuid';
 import { uploadFileWithBsv, validateFile, downloadFileById, downloadFileByTxId } from '../lib/file-service';
@@ -13,6 +13,13 @@ const FileUpload = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addFile, updateFile, user, files } = useStore();
+
+  // Automatycznie ustaw klucz prywatny z store, jeśli jest dostępny
+  useEffect(() => {
+    if (user.xpriv) {
+      setXPrivKey(user.xpriv);
+    }
+  }, [user.xpriv]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -162,21 +169,36 @@ const FileUpload = () => {
     <div>
       <form onSubmit={handleSubmit} className="flex flex-col items-center justify-center p-4 space-y-4">
         <div className="flex flex-col gap-4 w-full max-w-md">
-          <div className="relative">
-            <input
-              type="text"
-              value={xPrivKey}
-              onChange={(e) => {
-                setXPrivKey(e.target.value);
-                setXPrivError('');
-              }}
-              placeholder="Wprowadź klucz prywatny (xPriv)"
-              className="w-full px-3 py-2 border border-subtle rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-card"
-            />
-            {xPrivError && (
-              <div className="text-danger text-sm mt-1">{xPrivError}</div>
-            )}
-          </div>
+          {!user.xpriv && (
+            <div>
+              <label 
+                htmlFor="xPrivKey" 
+                className="block text-sm font-medium mb-1"
+              >
+                Klucz prywatny (xPriv)
+              </label>
+              <input
+                id="xPrivKey"
+                type="password"
+                className="w-full px-3 py-2 border border-subtle rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-card"
+                placeholder="Wprowadź swój klucz prywatny xpriv"
+                value={xPrivKey}
+                onChange={(e) => {
+                  setXPrivKey(e.target.value);
+                  setXPrivError('');
+                }}
+                required={!user.xpriv}
+              />
+              {xPrivError && (
+                <p className="mt-1 text-xs text-danger">
+                  {xPrivError}
+                </p>
+              )}
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Twój klucz prywatny jest potrzebny do podpisania transakcji
+              </p>
+            </div>
+          )}
 
           <div
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
