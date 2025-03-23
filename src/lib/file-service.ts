@@ -1,4 +1,5 @@
-import { createOpReturnTransaction } from './wallet';
+import { DraftTransactionConfig, OpReturn } from '@bsv/spv-wallet-js-client';
+import { createOpReturnTransaction as createOpReturnTransactionFromWallet, initUserWallet } from './wallet';
 import axios from 'axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -194,6 +195,36 @@ export const getTransactionHistory = async (xpub: string): Promise<any[]> => {
     });
   } catch (error) {
     console.error('Błąd podczas pobierania historii transakcji:', error);
+    throw error;
+  }
+};
+
+/**
+ * Creates an OP_RETURN transaction
+ */
+export const createOpReturnTransaction = async (xpriv: string, message: string): Promise<{ id: string }> => {
+  try {
+    const walletClient = await initUserWallet(xpriv);
+    
+    const opReturn: OpReturn = {
+      stringParts: [message],
+    };
+    
+    const transactionConfig: DraftTransactionConfig = {
+      outputs: [
+        {
+          opReturn: opReturn,
+        },
+      ],
+    };
+    
+    const draftTransaction = await walletClient.draftTransaction(transactionConfig, {});
+    const finalized = await walletClient.finalizeTransaction(draftTransaction);
+    const transaction = await walletClient.recordTransaction(finalized, draftTransaction.id, {});
+    
+    return { id: transaction.id };
+  } catch (error) {
+    console.error('Error creating OP_RETURN transaction:', error);
     throw error;
   }
 };
