@@ -3,7 +3,7 @@ import React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import useStore from '../lib/store';
 import { v4 as uuidv4 } from 'uuid';
-import { uploadFileWithBsv, validateFile, downloadFileById, downloadFileByTxId } from '../lib/file-service';
+import { uploadFileWithBsv, validateFile, downloadFileById, downloadFileByTxId, createOpReturnTransaction } from '../lib/file-service';
 
 const FileUpload = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -48,23 +48,47 @@ const FileUpload = () => {
         throw new Error('Wprowadź klucz prywatny (xPriv)');
       }
       
-      // Upload file to database and get database record ID
-      const result = await uploadFileWithBsv(file, xPrivKey);
-      
-      // Validate file integrity
-      const isValid = await validateFile(result.id, result.hash);
-      if (!isValid) {
-        throw new Error('File integrity validation failed');
+      // Handle PNG files differently
+      if (file.type === 'image/png') {
+        // Convert PNG to base64
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          if (e.target && typeof e.target.result === 'string') {
+            const base64Image = e.target.result;
+            
+            // Create OP_RETURN transaction with base64 image
+            const tx = await createOpReturnTransaction(xPrivKey, base64Image);
+            
+            // Update file state with transaction ID
+            updateFile(id, { 
+              status: 'completed',
+              progress: 100,
+              txId: tx.id,
+              databaseId: 0, // No database ID for PNG files
+              hash: "null" // No hash for PNG files
+            });
+          }
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // Upload file to database for other file types
+        const result = await uploadFileWithBsv(file, xPrivKey);
+        
+        // Validate file integrity
+        const isValid = await validateFile(result.id, result.hash);
+        if (!isValid) {
+          throw new Error('File integrity validation failed');
+        }
+        
+        // Update file state with database record ID and hash
+        updateFile(id, { 
+          status: 'completed',
+          progress: 100,
+          hash: result.hash,
+          txId: result.txId,
+          databaseId: result.id,
+        });
       }
-      
-      // Update file state with database record ID and hash
-      updateFile(id, { 
-        status: 'completed',
-        progress: 100,
-        hash: result.hash,
-        txId: result.txId,
-        databaseId: result.id,
-      });
     } catch (error) {
       console.error('Error uploading file:', error);
       updateFile(id, { 
@@ -76,6 +100,10 @@ const FileUpload = () => {
   };
 
   const handleDownloadById = async (databaseId: number) => {
+    if (!databaseId) {
+      // This is a PNG file, we can't download it directly from database
+      return;
+    }
     try {
       const fileBlob = await downloadFileById(databaseId);
       const url = window.URL.createObjectURL(fileBlob);
@@ -94,6 +122,7 @@ const FileUpload = () => {
 
   const handleDownloadByTx = async (txId: string) => {
     try {
+      // Try to download by transaction ID first
       const fileBlob = await downloadFileByTxId(txId);
       const url = window.URL.createObjectURL(fileBlob);
       const a = document.createElement('a');
@@ -290,12 +319,14 @@ const FileUpload = () => {
                 <div className="flex space-x-2">
                   {file.status === 'completed' && (
                     <>
-                      <button
-                        onClick={() => handleDownloadById(file.databaseId!)}
-                        className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-                      >
-                        Pobierz (ID)
-                      </button>
+                      {file.databaseId && (
+                        <button
+                          onClick={() => handleDownloadById(file.databaseId!)}
+                          className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                        >
+                          Pobierz (ID)
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDownloadByTx(file.txId!)}
                         className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
@@ -303,6 +334,9 @@ const FileUpload = () => {
                         Pobierz (TX)
                       </button>
                     </>
+                  )}
+                  {file.status === 'failed' && (
+                    <span className="text-red-500">Błąd: {file.error}</span>
                   )}
                 </div>
               </div>
